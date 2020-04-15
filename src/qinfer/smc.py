@@ -602,8 +602,6 @@ class SMCUpdater(ParticleDistribution):
             ) ** 2,  axis=3),
             axis=2
         )
-        self._dvar_hyp = var_hyp
-        self._dN = N
         # the risk of a given expparam can be calculated as the mean posterior
         # variance weighted over all possible outcomes
         return np.sum(N * var_hyp, axis=0)
@@ -636,25 +634,23 @@ class SMCUpdater(ParticleDistribution):
         # number of outcomes for the first experiment
         os = self.model.domain(expparams[0,np.newaxis])[0].values
 
-        # compute the hypothetical weights, likelihoods and normalizations for
-        # every possible outcome and expparam
-        # the likelihood over outcomes should sum to 1, so don't compute for last outcome
         w_hyp, L, N = self.hypothetical_update(
-                os[:-1], 
+                os,
                 expparams, 
                 return_normalization=True, 
                 return_likelihood=True
             )
-        w_hyp_last_outcome = (1 - L.sum(axis=0)) * self.particle_weights[np.newaxis, :]
-        N = np.concatenate([N[:,:,0], np.sum(w_hyp_last_outcome[np.newaxis,:,:], axis=2)], axis=0)
-        w_hyp_last_outcome = w_hyp_last_outcome / N[-1,:,np.newaxis]
-        w_hyp = np.concatenate([w_hyp, w_hyp_last_outcome[np.newaxis,:,:]], axis=0)
+        # make N correct shape 
+        N = N[:,:,0]
+        
         # w_hyp.shape == (n_out, n_eps, n_particles)
         # N.shape == (n_out, n_eps)
 
         # compute the Kullback-Liebler divergence for every experiment and possible outcome
         # KLD.shape == (n_out, n_eps)
-        KLD = np.sum(w_hyp * np.log(w_hyp / self.particle_weights), axis=2)
+
+        # take care of the limit x log x = 0 at x = 0 by using scipy xlogy to avoid 0*inf issue
+        KLD = np.sum(scipy.special.xlogy(w_hyp, w_hyp / self.particle_weights), axis=2)
 
         # return the expected KLD (ie expected info gain) for every experiment
         return np.sum(N * KLD, axis=0)
