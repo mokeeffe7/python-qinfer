@@ -579,20 +579,16 @@ class SMCUpdater(ParticleDistribution):
         os = self.model.domain(expparams[0,np.newaxis])[0].values
 
         # compute the hypothetical weights, likelihoods and normalizations for
-        # every possible outcome and expparam
-        # the likelihood over outcomes should sum to 1, so don't compute for last outcome
+        # every possible outcome 
         w_hyp, L, N = self.hypothetical_update(
-                os[:-1], 
+                os,
                 expparams, 
                 return_normalization=True, 
                 return_likelihood=True
             )
-        w_hyp_last_outcome = (1 - L.sum(axis=0)) * self.particle_weights[np.newaxis, :]
-        N = np.concatenate([N[:,:,0], np.sum(w_hyp_last_outcome[np.newaxis,:,:], axis=2)], axis=0)
-        w_hyp_last_outcome = w_hyp_last_outcome / N[-1,:,np.newaxis]
-        w_hyp = np.concatenate([w_hyp, w_hyp_last_outcome[np.newaxis,:,:]], axis=0)
         # w_hyp.shape == (n_out, n_eps, n_particles)
-        # N.shape == (n_out, n_eps)
+        # make N.shape == (n_out, n_eps)
+        N = N[:,:,0]
 
         # compute the hypothetical means and variances given outcomes and exparams
         # mu_hyp.shape == (n_out, n_eps, n_models)
@@ -606,7 +602,8 @@ class SMCUpdater(ParticleDistribution):
             ) ** 2,  axis=3),
             axis=2
         )
-
+        self._dvar_hyp = var_hyp
+        self._dN = N
         # the risk of a given expparam can be calculated as the mean posterior
         # variance weighted over all possible outcomes
         return np.sum(N * var_hyp, axis=0)
